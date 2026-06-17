@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IMG//CONVERT — Image Format Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0E2A4A;
+    --bg-deep: #0A2240;
+    --panel: #123660;
+    --panel-line: rgba(255,255,255,0.10);
+    --grid-line: rgba(255,255,255,0.05);
+    --text: #EAF2FF;
+    --muted: #7FA3CC;
+    --accent: #FFC857;
+    --accent-dim: #B8924A;
+    --ok: #8FD3A8;
+    --radius: 2px;
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+
+  body{
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .sheet{
+    width: 100%;
+    max-width: 560px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: var(--radius);
+    position: relative;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5);
+  }
+
+  /* corner crop marks, like a drafting sheet */
+  .sheet::before, .sheet::after,
+  .sheet .crop-tl, .sheet .crop-tr{
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--accent-dim);
+  }
+  .sheet::before{ top: -7px; left: -7px; border-right: none; border-bottom: none; }
+  .sheet::after{ bottom: -7px; right: -7px; border-left: none; border-top: none; }
+
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content: space-between;
+    padding: 18px 22px 16px;
+    border-bottom: 1px solid var(--panel-line);
+  }
+  header h1{
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  header h1 span{ color: var(--accent); }
+  header .ref{
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  main{ padding: 22px; }
+
+  .dropzone{
+    position: relative;
+    border: 1.5px dashed var(--panel-line);
+    border-radius: var(--radius);
+    min-height: 220px;
+    display:flex;
+    flex-direction: column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+    overflow: hidden;
+    background: rgba(255,255,255,0.02);
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color: var(--accent-dim);
+    background: rgba(255,255,255,0.04);
+  }
+  .dropzone:focus-visible{
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .dropzone .hint-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .dropzone .hint-sub{ font-size: 11.5px; color: var(--muted); }
+  .dropzone img{
+    max-width: 100%;
+    max-height: 260px;
+    display:block;
+  }
+  .dropzone.has-image{ padding: 16px; cursor: default; }
+  .visually-hidden{
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* dimension annotation lines, drafting style */
+  .dims{
+    display:none;
+    justify-content: space-between;
+    align-items:center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 10px;
+    letter-spacing: 0.03em;
+  }
+  .dims.show{ display:flex; }
+  .dims .seg{ display:flex; align-items:center; gap:6px; }
+  .dims .tick{ color: var(--accent-dim); }
+
+  .specrow{
+    display:none;
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--panel-line);
+    border-radius: var(--radius);
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.12);
+    display: none;
+  }
+  .specrow.show{ display:block; }
+  .specrow b{ color: var(--text); font-weight: 600; }
+  .specrow .arrow{ color: var(--accent); padding: 0 4px; }
+
+  fieldset{
+    border: none;
+    margin: 20px 0 0;
+    padding: 0;
+  }
+  legend{
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding: 0;
+  }
+
+  .formats{
+    display:flex;
+    gap: 8px;
+  }
+  .fmt-btn{
+    flex:1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--panel-line);
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 10px 0;
+    border-radius: var(--radius);
+    cursor:pointer;
+    transition: all .12s ease;
+  }
+  .fmt-btn:hover{ border-color: var(--accent-dim); color: var(--text); }
+  .fmt-btn.active{
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #18253A;
+  }
+  .fmt-btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .quality-row{
+    margin-top: 18px;
+    opacity: 1;
+    transition: opacity .15s ease;
+  }
+  .quality-row.disabled{ opacity: 0.35; pointer-events: none; }
+  .quality-label{
+    display:flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .quality-label b{ color: var(--accent); font-weight: 600; letter-spacing: 0; }
+  input[type="range"]{
+    width: 100%;
+    accent-color: var(--accent);
+    height: 4px;
+    background: transparent;
+  }
+
+  .run-btn{
+    width: 100%;
+    margin-top: 22px;
+    background: var(--accent);
+    color: #18253A;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    padding: 13px 0;
+    cursor: pointer;
+    transition: transform .08s ease, background .12s ease;
+  }
+  .run-btn:hover:not(:disabled){ background: #ffd57e; }
+  .run-btn:active:not(:disabled){ transform: scale(0.99); }
+  .run-btn:disabled{ background: var(--panel-line); color: var(--muted); cursor: not-allowed; }
+  .run-btn:focus-visible{ outline: 2px solid var(--text); outline-offset: 2px; }
+
+  .result{
+    display:none;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--ok);
+    border-radius: var(--radius);
+    background: rgba(143, 211, 168, 0.08);
+  }
+  .result.show{ display:flex; align-items:center; justify-content:space-between; gap: 10px; flex-wrap: wrap; }
+  .result .msg{ font-size: 11.5px; color: var(--ok); }
+  .result a{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: #18253A;
+    background: var(--ok);
+    text-decoration:none;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+  }
+
+  footer{
+    border-top: 1px solid var(--panel-line);
+    padding: 18px 22px 22px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 10px;
+  }
+  .credit-btn{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    background: transparent;
+    border: 1px solid var(--panel-line);
+    color: var(--text);
+    text-decoration:none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .credit-btn:hover{ border-color: var(--accent); color: var(--accent); }
+  .credit-btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+  .credit-btn .glyph{ color: var(--accent); }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <header>
+    <h1>IMG<span>//</span>CONVERT</h1>
+    <div class="ref">SHEET&nbsp;04 — CLIENT-SIDE</div>
+  </header>
+
+  <main>
+    <label class="dropzone" id="dropzone" for="fileInput">
+      <div class="hint" id="hint">
+        <div class="hint-title">DROP IMAGE / CLICK TO BROWSE</div>
+        <div class="hint-sub">accepts PNG, JPG, WEBP, GIF, BMP</div>
+      </div>
+      <img id="preview" alt="" style="display:none;">
+    </label>
+    <input type="file" id="fileInput" accept="image/*" class="visually-hidden">
+
+    <div class="dims" id="dims">
+      <div class="seg"><span class="tick">↔</span><span id="dimW">—</span> px</div>
+      <div class="seg"><span class="tick">↕</span><span id="dimH">—</span> px</div>
+      <div class="seg"><span class="tick">◆</span><span id="dimSize">—</span></div>
+    </div>
+
+    <fieldset>
+      <legend>OUTPUT FORMAT</legend>
+      <div class="formats" id="formats">
+        <button class="fmt-btn active" data-fmt="image/jpeg" data-ext="jpg">JPG</button>
+        <button class="fmt-btn" data-fmt="image/png" data-ext="png">PNG</button>
+        <button class="fmt-btn" data-fmt="image/webp" data-ext="webp">WEBP</button>
+      </div>
+    </fieldset>
+
+    <div class="quality-row" id="qualityRow">
+      <div class="quality-label">QUALITY <b id="qualityVal">82%</b></div>
+      <input type="range" id="quality" min="10" max="100" value="82">
+    </div>
+
+    <button class="run-btn" id="runBtn" disabled>▸ RUN CONVERSION</button>
+
+    <div class="result" id="result">
+      <span class="msg" id="resultMsg"></span>
+      <a id="downloadLink" download>↓ DOWNLOAD</a>
+    </div>
+
+    <div class="specrow" id="specrow"></div>
+  </main>
+
+  <footer>
+    <a class="credit-btn" href="https://digitalheroes.com" target="_blank" rel="noopener noreferrer">
+      <span class="glyph">◆</span> Built for Digital Heroes
+    </a>
+  </footer>
+</div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+  const dropzone   = document.getElementById('dropzone');
+  const fileInput  = document.getElementById('fileInput');
+  const hint       = document.getElementById('hint');
+  const previewImg = document.getElementById('preview');
+  const dims       = document.getElementById('dims');
+  const dimW       = document.getElementById('dimW');
+  const dimH       = document.getElementById('dimH');
+  const dimSize    = document.getElementById('dimSize');
+  const formats    = document.getElementById('formats');
+  const qualityRow = document.getElementById('qualityRow');
+  const quality    = document.getElementById('quality');
+  const qualityVal = document.getElementById('qualityVal');
+  const runBtn     = document.getElementById('runBtn');
+  const result     = document.getElementById('result');
+  const resultMsg  = document.getElementById('resultMsg');
+  const downloadLink = document.getElementById('downloadLink');
+  const specrow    = document.getElementById('specrow');
+  const canvas     = document.getElementById('canvas');
+
+  let currentImage = null;
+  let currentFile  = null;
+  let activeFmt    = 'image/jpeg';
+  let activeExt    = 'jpg';
+
+  function formatBytes(bytes){
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  ['dragenter', 'dragover'].forEach(evt =>
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag'); })
+  );
+  ['dragleave', 'drop'].forEach(evt =>
+    dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); })
+  );
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+  });
+
+  function loadFile(file){
+    if (!file.type.startsWith('image/')) return;
+    currentFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        currentImage = img;
+        previewImg.src = e.target.result;
+        previewImg.style.display = 'block';
+        hint.style.display = 'none';
+        dropzone.classList.add('has-image');
+
+        dimW.textContent = img.naturalWidth;
+        dimH.textContent = img.naturalHeight;
+        dimSize.textContent = formatBytes(file.size);
+        dims.classList.add('show');
+
+        runBtn.disabled = false;
+        result.classList.remove('show');
+        specrow.classList.remove('show');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  formats.addEventListener('click', (e) => {
+    const btn = e.target.closest('.fmt-btn');
+    if (!btn) return;
+    formats.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFmt = btn.dataset.fmt;
+    activeExt = btn.dataset.ext;
+    qualityRow.classList.toggle('disabled', activeFmt === 'image/png');
+  });
+
+  quality.addEventListener('input', () => {
+    qualityVal.textContent = quality.value + '%';
+  });
+
+  runBtn.addEventListener('click', () => {
+    if (!currentImage) return;
+
+    canvas.width = currentImage.naturalWidth;
+    canvas.height = currentImage.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // flatten transparency onto white for JPG, which has no alpha channel
+    if (activeFmt === 'image/jpeg') {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(currentImage, 0, 0);
+
+    const q = Number(quality.value) / 100;
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const baseName = (currentFile.name || 'image').replace(/\.[^/.]+$/, '');
+      downloadLink.href = url;
+      downloadLink.download = `${baseName}-converted.${activeExt}`;
+
+      const before = currentFile.size;
+      const after = blob.size;
+      const delta = before ? Math.round((1 - after / before) * 100) : 0;
+
+      resultMsg.textContent = delta > 0
+        ? `Ready. ${delta}% smaller than the original.`
+        : `Ready for download.`;
+      result.classList.add('show');
+
+      specrow.innerHTML = `<b>${baseName}</b>${formatBytes(before)} <span class="arrow">→</span> <b>${formatBytes(after)}</b> · ${activeExt.toUpperCase()}`;
+      specrow.classList.add('show');
+    }, activeFmt, q);
+  });
+</script>
+
+</body>
+</html>
